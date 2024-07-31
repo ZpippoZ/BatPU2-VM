@@ -155,8 +155,6 @@ def gui(running):
                 width=rectangles[rectangle][2],
                 border_radius=rectangles[rectangle][3]
             )
-            # if rectangle == "white_border_rect":
-                # print(f"Drawn at {rectangles[rectangle][1][0]}, {rectangles[rectangle][1][1]}")
 
         for y in range(32):
             for x in range(32):
@@ -238,14 +236,18 @@ def vm(running):
 
     stack = []
     flags_buf = flags.buf
-    reg_buf = registers.buf
+    regs_buf = registers.buf
     ram_buf = ram.buf
 
     with open("programs/test.mc", 'r') as file:
         lines = file.read().split()
         lines = [int(line, 2) for line in lines]
 
-    times = []
+    cycles = 0
+    start_time = perf_counter()
+    min_time = [1]
+    max_time = [0]
+    
     opcodes = [
         "nop",
         "hlt",
@@ -267,7 +269,7 @@ def vm(running):
 
     while not running.is_set():
         time = perf_counter()
-        reg_buf[0] = 0
+        regs_buf[0] = 0
 
         instruction = lines[pc[0]]
 
@@ -282,107 +284,138 @@ def vm(running):
         ram_offset -= 16 if ram_offset & 8 else ram_offset
 
         pc[0] += 1
+        cycles += 1
 
         match opcode:
             case 0:
-                times.append((perf_counter() - time, opcodes[opcode]))
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 1:
-                running.set()
-                times.append((perf_counter() - time, opcodes[opcode]))
-                continue
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
+                break
             case 2:
-                result = reg_buf[regA] + reg_buf[regB]
-                reg_buf[regDest] = result & 255
+                result = regs_buf[regA] + regs_buf[regB]
+                regs_buf[regDest] = result & 255
                 flags_buf[0] = result > 255
-                flags_buf[1] = not result
-                times.append((perf_counter() - time, opcodes[opcode]))
+                flags_buf[1] = not regs_buf[regDest]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 3:
-                result = reg_buf[regA] - reg_buf[regB]
-                reg_buf[regDest] = result & 255
-                flags_buf[0] = reg_buf[regA] >= reg_buf[regB]
-                flags_buf[1] = not result
-                times.append((perf_counter() - time, opcodes[opcode]))
+                result = regs_buf[regA] - regs_buf[regB]
+                regs_buf[regDest] = result & 255
+                flags_buf[0] = regs_buf[regA] >= regs_buf[regB]
+                flags_buf[1] = not regs_buf[regDest]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 4:
-                result = 0b1111 ^ (reg_buf[regA] | reg_buf[regB])
-                reg_buf[regDest] = result
-                flags_buf[1] = not result
-                times.append((perf_counter() - time, opcodes[opcode]))
+                result = 0b1111 ^ (regs_buf[regA] | regs_buf[regB])
+                regs_buf[regDest] = result
+                flags_buf[1] = not regs_buf[regDest]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 5:
-                result = reg_buf[regA] & reg_buf[regB]
-                reg_buf[regDest] = reg_buf[regA] & reg_buf[regB]
-                flags_buf[1] = not result
-                times.append((perf_counter() - time, opcodes[opcode]))
+                result = regs_buf[regA] & regs_buf[regB]
+                regs_buf[regDest] = result
+                flags_buf[1] = not regs_buf[regDest]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 6:
-                result = reg_buf[regA] ^ reg_buf[regB]
-                reg_buf[regDest] = result
-                flags_buf[1] = not result
-                times.append((perf_counter() - time, opcodes[opcode]))
+                result = regs_buf[regA] ^ regs_buf[regB]
+                regs_buf[regDest] = result
+                flags_buf[1] = not regs_buf[regDest]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 7:
-                reg_buf[regDest] = reg_buf[regA] >> 1
-                times.append((perf_counter() - time, opcodes[opcode]))
+                regs_buf[regDest] = regs_buf[regA] >> 1
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 8:
-                reg_buf[regDest] = immediate
-                times.append((perf_counter() - time, opcodes[opcode]))
+                regs_buf[regDest] = immediate
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 9:
-                result = reg_buf[regA] + immediate
-                reg_buf[regA] = result & 255
+                result = regs_buf[regA] + immediate
+                regs_buf[regA] = result & 255
                 flags_buf[0] = result > 255
-                flags_buf[1] = not result
-                times.append((perf_counter() - time, opcodes[opcode]))
+                flags_buf[1] = not regs_buf[regA]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 10:
                 pc[0] = address
-                times.append((perf_counter() - time, opcodes[opcode]))
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 11:
-                pc[0] = address if flags_buf[condition] else pc[0]
-                times.append((perf_counter() - time, opcodes[opcode]))
+                match condition:
+                    case 0:
+                        pc[0] = address if flags_buf[1] else pc[0]
+                    case 1:
+                        pc[0] = address if not flags_buf[1] else pc[0]
+                    case 2:
+                        pc[0] = address if flags_buf[0] else pc[0]
+                    case 3:
+                        pc[0] = address if not flags_buf[0] else pc[0]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 12:
                 stack.insert(0, pc[0])
                 pc[0] = address
-                times.append((perf_counter() - time, opcodes[opcode]))
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 13:
                 pc[0] = stack.pop(0)
-                times.append((perf_counter() - time, opcodes[opcode]))
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 14:
-                reg_buf[regB] = ram_buf[regA + ram_offset]
-                times.append((perf_counter() - time, opcodes[opcode]))
+                regs_buf[regB] = ram_buf[regA + ram_offset]
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
             case 15:
                 ram_buf[regA + ram_offset] = regB
-                times.append((perf_counter() - time, opcodes[opcode]))
+                min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
+                max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
                 continue
 
 
+    end_time = perf_counter()
+
+    pc.shutdown()
     flags.close()
     registers.close()
     ram.close()
-
-    print(f"\nAverage instruction time: {sum(time[0] for time in times)/len(times):.9f}")
-    min_time = min(times)
-    max_time = max(times)
-    print(f"Faster instruction time:  {min_time[0]:.9f}, opcode: {min_time[1]}")
-    print(f"Slower instruction time:  {max_time[0]:.9f}, opcode: {max_time[1]}")
+    
+    time = end_time - start_time
+    print(f"\n{cycles} cycles executed")
+    print(f"The program ran for {round(time, 3)} seconds")
+    print(f"\nAverage instruction time: {time / cycles:.9f} seconds")
+    print(f"\nFastest instruction time: {min_time[0]:.9f} seconds, opcode: {min_time[1]}")
+    print(f"Slowest instruction time: {max_time[0]:.9f} seconds, opcode: {max_time[1]}")
+    print(f"\nAverage instructions per second: {cycles / time:.9f}\n")
 
 
 if __name__ == "__main__":
     running = multiprocessing.Event()
 
-    gui_process = multiprocessing.Process(target=gui, args=(running,))
+    gui_process = multiprocessing.Process(target=gui, args=(running,), name="BatPU2 GUI")
 
     gui_process.start()
 
+    multiprocessing.current_process().name = "BatPU2 VM"
     vm(running)
 
-    gui_process.terminate()
+    gui_process.join()
+    gui_process.close()
