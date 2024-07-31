@@ -369,11 +369,11 @@ def vm(running):
     registers.close()
     ram.close()
 
-    print(f"\nAverage instruction time: {f"{round(sum(time[0] for time in times)/len(times), 6):.9f}"}")
-    min_time = min(time for time in times)
-    max_time = max(time for time in times)
-    print(f"Faster instruction time:  {f"{min_time[0]:.9f}"}, opcode: {min_time[1]}")
-    print(f"Slower instruction time:  {f"{max_time[0]:.9f}"}, opcode: {max_time[1]}")
+    print(f"\nAverage instruction time: {sum(time[0] for time in times)/len(times):.9f}")
+    min_time = min(times)
+    max_time = max(times)
+    print(f"Faster instruction time:  {min_time[0]:.9f}, opcode: {min_time[1]}")
+    print(f"Slower instruction time:  {max_time[0]:.9f}, opcode: {max_time[1]}")
 
 
 if __name__ == "__main__":
