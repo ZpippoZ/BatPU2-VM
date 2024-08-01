@@ -278,9 +278,9 @@ def vm(running, lock, pc):
         instruction = lines[pc[0]]
 
         opcode = instruction >> 12
-        regDest = instruction >> 8 & 15
-        regA = instruction >> 4 & 15
-        regB = instruction & 15
+        regA = instruction >> 8 & 15
+        regB = instruction >> 4 & 15
+        regDest = instruction & 15
         immediate = instruction & 255
         condition = instruction >> 10 & 3
         address = instruction & 1023
