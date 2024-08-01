@@ -3,7 +3,7 @@ from multiprocessing import shared_memory
 from time import perf_counter
 
 
-def gui(running):
+def gui(running, lock, pc):
     import pygame
 
     WIDTH = 1440
@@ -46,6 +46,7 @@ def gui(running):
         "credits1_rect": (background_color, pygame.Rect(10, 0, 400, 0), width, background_rects_radius),
         "credits2_rect": (background_color, pygame.Rect(10, 0, 400, 0), width, background_rects_radius),
         "program_counter_rect": (background_rect_color, pygame.Rect(420, 10, 400, 50), width, background_rects_radius),
+        "pc_rect": (background_rect_color, pygame.Rect(450, 10, 0, 0), width, background_rects_radius),
         "started_rect": (controls_color, pygame.Rect(420, 70, 400, 50), width, inside_rects_radius),
         "step_rect": (controls_color, pygame.Rect(420, 130, 195, 50), width, inside_rects_radius),
         "paused_rect": (controls_color, pygame.Rect(625, 130, 195, 50), width, inside_rects_radius),
@@ -85,6 +86,7 @@ def gui(running):
         "credits1_surface": font_credits.render("BatPU2 Virtual Machine", True, text_color, background_color),
         "credits2_surface": font_credits.render("By zPippo", True, text_color, background_color),
         "program_counter_surface": font_controls.render("Program Counter:", True, text_color, background_rect_color),
+        "pc_surface": font_controls.render(str(pc[0]), True, text_color, background_rect_color),
         "started_surface": font_controls.render("-Start-", True, text_color, None),
         "step_surface": font_controls.render("<Step>", True, text_color, None),
         "paused_surface": font_controls.render("|Pause|", True, text_color, None),
@@ -93,7 +95,7 @@ def gui(running):
         "flags_surface": font_debug.render("Flags", True, text_color, background_rect_color),
         "registers_surface": font_debug.render("Registers", True, text_color, background_rect_color),
         "ram_surface": font_debug.render("RAM (Address:Value)", True, text_color, background_rect_color),
-        "settings_surface": font_debug.render("Settings (soon™)", True, text_color, background_rect_color),
+        "settings_surface": font_debug.render("Settings (soon™)", True, text_color, background_rect_color)
     }
 
     text_positions = {
@@ -102,6 +104,7 @@ def gui(running):
         "credits1": (-1, 755, 0, 0),
         "credits2": (-1, 780, 0, 0),
         "program_counter": (-1, -1, -50, -2),
+        "pc": (-1, -1, 0, 0),
         "started": (-1, -1, 0, -2),
         "step": (-1, -1, 0, -2),
         "paused": (-1, -1, 0, -2),
@@ -142,6 +145,9 @@ def gui(running):
 
         screen.fill(background_color)
 
+        #with lock:
+            #print(pc)
+        text_surfaces["pc"] = font_controls.render(str(pc), True, text_color, background_rect_color)
         text_surfaces["started_surface"] = font_controls.render("-Start-", True, text_color, None) if not started\
             else font_controls.render("-Stop-", True, text_color, None)
         text_surfaces["paused_surface"] = font_controls.render("|Pause|", True, text_color, None) if not paused\
@@ -227,9 +233,7 @@ def gui(running):
     pygame.quit()
 
 
-def vm(running):
-    from time import sleep
-    pc = shared_memory.ShareableList([0])
+def vm(running, lock, pc):
     flags = shared_memory.SharedMemory(create=True, size=2)
     registers = shared_memory.SharedMemory(create=True, size=16)
     ram = shared_memory.SharedMemory(create=True, size=256)
@@ -274,9 +278,9 @@ def vm(running):
         instruction = lines[pc[0]]
 
         opcode = instruction >> 12
-        regA = instruction >> 8 & 15
-        regB = instruction >> 4 & 15
-        regDest = instruction & 15
+        regDest = instruction >> 8 & 15
+        regA = instruction >> 4 & 15
+        regB = instruction & 15
         immediate = instruction & 255
         condition = instruction >> 10 & 3
         address = instruction & 1023
@@ -285,6 +289,8 @@ def vm(running):
 
         pc[0] += 1
         cycles += 1
+        #with lock:
+            #print(regs_buf[3])
 
         match opcode:
             case 0:
@@ -294,6 +300,7 @@ def vm(running):
             case 1:
                 min_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time < min_time[0] else min_time
                 max_time = [perf_counter() - time, opcodes[opcode]] if perf_counter() - time > max_time[0] else max_time
+                print("Halted")
                 break
             case 2:
                 result = regs_buf[regA] + regs_buf[regB]
@@ -344,6 +351,8 @@ def vm(running):
                 continue
             case 9:
                 result = regs_buf[regA] + immediate
+                print(regs_buf[regA] if regA == 3 else "", end="\n" if regA == 3 else "")
+                #print(result & 255 if regA == 3 else "", end="\n" if regA == 3 else "")
                 regs_buf[regA] = result & 255
                 flags_buf[0] = result > 255
                 flags_buf[1] = not regs_buf[regA]
@@ -393,7 +402,6 @@ def vm(running):
 
     end_time = perf_counter()
 
-    pc.shutdown()
     flags.close()
     registers.close()
     ram.close()
@@ -409,13 +417,15 @@ def vm(running):
 
 if __name__ == "__main__":
     running = multiprocessing.Event()
+    lock = multiprocessing.Lock()
+    pc = shared_memory.ShareableList([0])
 
-    gui_process = multiprocessing.Process(target=gui, args=(running,), name="BatPU2 GUI")
+    gui_process = multiprocessing.Process(target=gui, args=(running, lock, pc), name="BatPU2 GUI")
 
     gui_process.start()
 
     multiprocessing.current_process().name = "BatPU2 VM"
-    vm(running)
+    vm(running, lock, pc)
 
     gui_process.join()
     gui_process.close()
