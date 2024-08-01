@@ -300,14 +300,13 @@ def vm(running, lock, pc):
                 regs_buf[regDest] = result & 255
                 flags_buf[0] = result > 255
                 flags_buf[1] = not regs_buf[regDest]
-                
             case 3:
                 result = regs_buf[regA] - regs_buf[regB]
                 regs_buf[regDest] = result & 255
                 flags_buf[0] = regs_buf[regA] >= regs_buf[regB]
                 flags_buf[1] = not regs_buf[regDest]
             case 4:
-                result = 0b1111 ^ (regs_buf[regA] | regs_buf[regB])
+                result = 0b1111111111 ^ (regs_buf[regA] | regs_buf[regB])
                 regs_buf[regDest] = result
                 flags_buf[1] = not regs_buf[regDest]
             case 5:
