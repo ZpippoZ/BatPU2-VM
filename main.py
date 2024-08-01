@@ -306,7 +306,7 @@ def vm(running, lock, pc):
                 flags_buf[0] = regs_buf[regA] >= regs_buf[regB]
                 flags_buf[1] = not regs_buf[regDest]
             case 4:
-                result = 0b1111111111 ^ (regs_buf[regA] | regs_buf[regB])
+                result = 0b11111111 ^ (regs_buf[regA] | regs_buf[regB])
                 regs_buf[regDest] = result
                 flags_buf[1] = not regs_buf[regDest]
             case 5:
